@@ -49,7 +49,7 @@ fi
 
 # ── Locate Xtensa toolchain ─────────────────────────────────────────────────
 TOOLCHAIN_DIR="$(find "$HOME/.espressif/tools/xtensa-esp-elf" \
-    -maxdepth 3 -name "xtensa-esp32s3-elf-gcc" 2>/dev/null \
+    -maxdepth 4 -name "xtensa-esp32s3-elf-gcc" 2>/dev/null \
     | head -1 | xargs dirname 2>/dev/null || true)"
 
 if [ -z "$TOOLCHAIN_DIR" ]; then
