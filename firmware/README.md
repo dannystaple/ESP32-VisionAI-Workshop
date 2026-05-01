@@ -57,6 +57,24 @@ bash firmware/tools/fetch_model.sh
 This downloads `person_detect.tflite` from the TFLM GitHub repository and generates
 `firmware/lab_02/main/model_data.cc` via `xxd`.
 
+## Wokwi Simulation
+
+`lab_02` supports simulation without hardware. The firmware detects camera
+init failure at runtime and falls back to synthetic frame generation — the
+full TFLM inference pipeline still runs.
+
+**Setup (one time):**
+```bash
+bash firmware/tools/fetch_model.sh
+bash firmware/tools/build.sh lab_02 build
+```
+Then in VS Code: **F1 → Wokwi: Start Simulator** (requires the Wokwi for VS
+Code extension). The diagram includes three LEDs pre-wired on GPIO 4/5/6 for
+Exercise 2.5.
+
+Simulation output is tagged `[SIM]` on every line to distinguish it from a
+real hardware run.
+
 ## Verified Performance (hardware: ESP32-S3 @ 240 MHz)
 
 | Lab | What it measures | Result |

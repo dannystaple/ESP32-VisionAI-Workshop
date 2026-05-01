@@ -136,6 +136,45 @@ The 2.6 FPS end-to-end figure includes a 1-tick yield to keep the scheduler heal
 
 ---
 
+## Wokwi Simulation (no hardware required)
+
+The lab_02 firmware detects at runtime whether a camera is present. If camera
+initialisation fails — as it will in Wokwi, which has no OV3660 model — the
+firmware falls back automatically to synthetic frame generation and continues
+running inference.
+
+### One-time setup
+
+1. Install the **Wokwi for VS Code** extension from the VS Code Marketplace.
+2. Open the repo root in VS Code.
+3. Build the firmware (the `.elf` must exist before Wokwi can run):
+   ```bash
+   bash firmware/tools/fetch_model.sh   # generate model_data.cc
+   bash firmware/tools/build.sh lab_02 build
+   ```
+4. In VS Code, open `firmware/lab_02/` and press **F1 → Wokwi: Start Simulator**.
+
+### What you'll see
+
+The serial monitor panel will show:
+```
+W (500) lab_02: Camera init failed — entering simulation mode
+W (500) lab_02: Synthetic frames will be generated (Wokwi / no-camera build)
+...
+=== SIMULATION MODE — synthetic frames (no camera) ===
+
+  [   0]  no person     score=  54  |  prep=1ms  infer=382ms  total=383ms  [SIM]
+  [   1]  no person     score=  47  |  prep=1ms  infer=382ms  total=384ms  [SIM]
+```
+
+Each line is tagged `[SIM]` to make the mode visible. The pipeline — preprocess,
+TFLM invoke, argmax, score print — runs identically to hardware; only the camera
+capture step is replaced by the synthetic frame generator.
+
+The three LEDs in the Wokwi diagram (GPIO 4/5/6) are pre-wired for Exercise 2.5.
+
+---
+
 ## Checkpoint
 
 - [ ] Model embedded as C array and compiles cleanly

@@ -15,15 +15,11 @@ static const char *TAG = "lab_02";
 #define MODEL_INPUT_W  96
 #define MODEL_INPUT_H  96
 
-// Person detection labels — index matches model output tensor position
 static const char *LABELS[] = {
     "no person",
     "person",
 };
 static const int NUM_LABELS = sizeof(LABELS) / sizeof(LABELS[0]);
-
-// Optional: score threshold below which we report "uncertain"
-#define SCORE_THRESHOLD  10   // raw INT8 margin above the other class
 
 static esp_err_t camera_init_grayscale(void)
 {
@@ -46,13 +42,25 @@ static esp_err_t camera_init_grayscale(void)
         .ledc_channel = LEDC_CHANNEL_0,
 
         .pixel_format = PIXFORMAT_GRAYSCALE,
-        .frame_size   = FRAMESIZE_QVGA,   // 320×240
+        .frame_size   = FRAMESIZE_QVGA,
         .jpeg_quality = 12,
         .fb_count     = 1,
         .fb_location  = CAMERA_FB_IN_PSRAM,
         .grab_mode    = CAMERA_GRAB_LATEST,
     };
     return esp_camera_init(&cfg);
+}
+
+// Simulation fallback: generate a synthetic 96×96 INT8 frame when no camera
+// is available (e.g. Wokwi). The pattern shifts each frame so scores vary.
+static void generate_sim_frame(int8_t *out, int frame_num)
+{
+    for (int y = 0; y < MODEL_INPUT_H; y++) {
+        for (int x = 0; x < MODEL_INPUT_W; x++) {
+            int val = ((x + y + frame_num * 3) % 256) - 128;
+            out[y * MODEL_INPUT_W + x] = (int8_t)val;
+        }
+    }
 }
 
 extern "C" void app_main(void)
@@ -63,51 +71,60 @@ extern "C" void app_main(void)
 
     vTaskDelay(pdMS_TO_TICKS(500));
 
-    ESP_ERROR_CHECK(camera_init_grayscale());
-    ESP_LOGI(TAG, "Camera ready (QVGA grayscale 320x240)");
-
-    // Discard first few frames while sensor stabilises
-    for (int i = 0; i < 5; i++) {
-        camera_fb_t *fb = esp_camera_fb_get();
-        if (fb) esp_camera_fb_return(fb);
-        vTaskDelay(pdMS_TO_TICKS(50));
+    bool sim_mode = false;
+    esp_err_t cam_err = camera_init_grayscale();
+    if (cam_err == ESP_OK) {
+        ESP_LOGI(TAG, "Camera ready (QVGA grayscale 320x240)");
+        // Discard first few frames while sensor stabilises
+        for (int i = 0; i < 5; i++) {
+            camera_fb_t *fb = esp_camera_fb_get();
+            if (fb) esp_camera_fb_return(fb);
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+    } else {
+        sim_mode = true;
+        ESP_LOGW(TAG, "Camera init failed (0x%x) — entering simulation mode", (unsigned)cam_err);
+        ESP_LOGW(TAG, "Synthetic frames will be generated (Wokwi / no-camera build)");
     }
 
     inference_init(person_detect_tflite, person_detect_tflite_len,
                    MODEL_INPUT_W, MODEL_INPUT_H);
     ESP_LOGI(TAG, "Inference engine ready");
 
-    // Static scratch buffer for the preprocessed 96x96 frame
     static int8_t preprocessed[MODEL_INPUT_W * MODEL_INPUT_H];
 
     int frame_count = 0;
     int64_t t_last_fps = esp_timer_get_time();
 
     printf("\n");
-    printf("=== Inference running — point camera at subject ===\n");
+    if (sim_mode) {
+        printf("=== SIMULATION MODE — synthetic frames (no camera) ===\n");
+    } else {
+        printf("=== Inference running — point camera at subject ===\n");
+    }
     printf("    Score range: -128 (no confidence) to 127 (full confidence)\n");
     printf("\n");
 
     while (true) {
         int64_t t0 = esp_timer_get_time();
 
-        camera_fb_t *fb = esp_camera_fb_get();
-        if (!fb) {
-            ESP_LOGW(TAG, "Frame capture failed");
-            vTaskDelay(pdMS_TO_TICKS(10));
-            continue;
-        }
-
-        // Skip truncated frames (cam_hal: FB-SIZE mismatch)
-        if (fb->len != (size_t)(fb->width * fb->height)) {
+        if (sim_mode) {
+            generate_sim_frame(preprocessed, frame_count);
+        } else {
+            camera_fb_t *fb = esp_camera_fb_get();
+            if (!fb) {
+                ESP_LOGW(TAG, "Frame capture failed");
+                vTaskDelay(pdMS_TO_TICKS(10));
+                continue;
+            }
+            // Skip truncated frames (cam_hal: FB-SIZE mismatch)
+            if (fb->len != (size_t)(fb->width * fb->height)) {
+                esp_camera_fb_return(fb);
+                continue;
+            }
+            preprocess_frame(fb, preprocessed, MODEL_INPUT_W, MODEL_INPUT_H);
             esp_camera_fb_return(fb);
-            continue;
         }
-
-        int64_t t_capture = esp_timer_get_time();
-
-        preprocess_frame(fb, preprocessed, MODEL_INPUT_W, MODEL_INPUT_H);
-        esp_camera_fb_return(fb);
 
         int64_t t_preprocess = esp_timer_get_time();
 
@@ -115,20 +132,19 @@ extern "C" void app_main(void)
 
         int64_t t_infer = esp_timer_get_time();
 
-        int capture_ms    = (int)((t_capture    - t0)          / 1000);
-        int preprocess_ms = (int)((t_preprocess - t_capture)   / 1000);
-        int infer_ms      = (int)((t_infer      - t_preprocess)/ 1000);
-        int total_ms      = (int)((t_infer      - t0)          / 1000);
+        int prep_ms  = (int)((t_preprocess - t0)          / 1000);
+        int infer_ms = (int)((t_infer      - t_preprocess) / 1000);
+        int total_ms = (int)((t_infer      - t0)           / 1000);
 
         const char *label = (result.class_index < NUM_LABELS)
                             ? LABELS[result.class_index]
                             : "unknown";
 
-        printf("  [%4d]  %-12s  score=%4d  |  capture=%dms  prep=%dms  infer=%dms  total=%dms\n",
+        printf("  [%4d]  %-12s  score=%4d  |  prep=%dms  infer=%dms  total=%dms%s\n",
                frame_count++, label, (int)result.score,
-               capture_ms, preprocess_ms, infer_ms, total_ms);
+               prep_ms, infer_ms, total_ms,
+               sim_mode ? "  [SIM]" : "");
 
-        // Print FPS every 10 frames
         if (frame_count % 10 == 0) {
             int64_t now = esp_timer_get_time();
             float fps = 10.0f / ((now - t_last_fps) / 1e6f);
@@ -136,7 +152,6 @@ extern "C" void app_main(void)
             t_last_fps = now;
         }
 
-        // Yield 1 ms to keep the task watchdog (IDLE task) fed
         vTaskDelay(pdMS_TO_TICKS(1));
     }
 }

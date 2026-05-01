@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "author": "Adam Pippert",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-esp32s3-devkitc-1",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": 80,
+      "left": -170,
+      "attrs": { "value": "220" },
+      "rotate": 90
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led1",
+      "top": 50,
+      "left": -230,
+      "attrs": { "color": "green" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r2",
+      "top": 160,
+      "left": -170,
+      "attrs": { "value": "220" },
+      "rotate": 90
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led2",
+      "top": 130,
+      "left": -230,
+      "attrs": { "color": "red" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r3",
+      "top": 240,
+      "left": -170,
+      "attrs": { "value": "220" },
+      "rotate": 90
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led3",
+      "top": 210,
+      "left": -230,
+      "attrs": { "color": "yellow" }
+    }
+  ],
+  "connections": [
+    ["esp:GPIO4", "r1:2", "green", ["h-20"]],
+    ["r1:1", "led1:A", "green", []],
+    ["led1:K", "esp:GND.2", "black", ["h10", "v200"]],
+
+    ["esp:GPIO5", "r2:2", "red", ["h-20"]],
+    ["r2:1", "led2:A", "red", []],
+    ["led2:K", "esp:GND.2", "black", ["h10", "v120"]],
+
+    ["esp:GPIO6", "r3:2", "yellow", ["h-20"]],
+    ["r3:1", "led3:A", "yellow", []],
+    ["led3:K", "esp:GND.2", "black", ["h10", "v40"]]
+  ]
+}
