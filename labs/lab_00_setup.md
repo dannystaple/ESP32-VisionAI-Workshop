@@ -37,10 +37,20 @@ git checkout v5.4.1
 > **macOS note:** If `install.sh` picks up Python 3.9 instead of a newer version, run
 > `export PATH="/opt/homebrew/bin:$PATH"` first, then re-run `./install.sh esp32s3`.
 
-Activate the environment:
+**Option A — for this workshop only** (recommended): use the repo's shell helper,
+which auto-detects the correct Python venv and toolchain:
+```bash
+source firmware/tools/esp_env.sh
+```
+
+**Option B — standard IDF activation** (for general IDF use):
 ```bash
 . ~/esp/esp-idf/export.sh
 ```
+
+> **macOS pitfall with Option B:** `export.sh` may select Python 3.9 even after
+> the Homebrew note above. If you see `ruamel.yaml not found` or similar errors,
+> switch to Option A.
 
 Verify:
 ```bash
