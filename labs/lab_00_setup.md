@@ -34,8 +34,18 @@ Run all commands in **Git Bash** (not PowerShell or CMD).
 git clone --recursive https://github.com/espressif/esp-idf.git ~/esp/esp-idf
 cd ~/esp/esp-idf
 git checkout v5.4.1
+git submodule update --init --recursive   # REQUIRED after checkout — see note below
 ./install.sh esp32s3
 ```
+
+> **Why the `git submodule update` step is not optional:** `--recursive` on the
+> initial clone fetches submodules for the default branch. The subsequent
+> `git checkout v5.4.1` moves the submodule *pointers* to the v5.4.1 commits but
+> does **not** update the submodule working trees. Skipping the update leaves
+> components like `mbedtls` stale, which surfaces later as a CMake build error:
+> *"Cannot specify link libraries for target `mbedcrypto` which is not built by
+> this project."* Running `git submodule update --init --recursive` checks out the
+> correct sources and prevents it. (See Troubleshooting.)
 
 > **macOS note:** If `install.sh` picks up Python 3.9 instead of a newer version, run
 > `export PATH="/opt/homebrew/bin:$PATH"` first, then re-run `./install.sh esp32s3`.
@@ -204,6 +214,7 @@ You should see a live MJPEG stream from the OV3660 camera at around 25–30 FPS.
 
 | Symptom | Fix |
 |---|---|
+| `CMake Error ... target "mbedcrypto" ... is not built by this project` | ESP-IDF submodules are stale/missing. Run `cd ~/esp/esp-idf && git submodule update --init --recursive`, then delete the lab's `build/` dir and rebuild. See note in section 2. |
 | `idf.py: command not found` | Run `. ~/esp/esp-idf/export.sh` |
 | `port not found` | Check USB cable is data-capable; try different port |
 | `Camera init failed` | Confirm `camera_pins.h` pin definitions match your board |
