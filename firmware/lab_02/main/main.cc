@@ -4,6 +4,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_camera.h"
+#include "driver/temperature_sensor.h"
 
 #include "camera_pins.h"
 #include "model_data.h"
@@ -11,6 +12,22 @@
 #include "inference.h"
 
 static const char *TAG = "lab_02";
+
+static temperature_sensor_handle_t s_temp_sensor = NULL;
+
+static void temp_sensor_init(void)
+{
+    temperature_sensor_config_t cfg = TEMPERATURE_SENSOR_CONFIG_DEFAULT(20, 100);
+    ESP_ERROR_CHECK(temperature_sensor_install(&cfg, &s_temp_sensor));
+    ESP_ERROR_CHECK(temperature_sensor_enable(s_temp_sensor));
+}
+
+static float chip_temp_celsius(void)
+{
+    float t = 0.0f;
+    if (s_temp_sensor) temperature_sensor_get_celsius(s_temp_sensor, &t);
+    return t;
+}
 
 #define MODEL_INPUT_W  96
 #define MODEL_INPUT_H  96
@@ -87,6 +104,9 @@ extern "C" void app_main(void)
         ESP_LOGW(TAG, "Synthetic frames will be generated (Wokwi / no-camera build)");
     }
 
+    temp_sensor_init();
+    ESP_LOGI(TAG, "Temperature sensor ready");
+
     inference_init(person_detect_tflite, person_detect_tflite_len,
                    MODEL_INPUT_W, MODEL_INPUT_H);
     ESP_LOGI(TAG, "Inference engine ready");
@@ -148,7 +168,7 @@ extern "C" void app_main(void)
         if (frame_count % 10 == 0) {
             int64_t now = esp_timer_get_time();
             float fps = 10.0f / ((now - t_last_fps) / 1e6f);
-            printf("  --- %.1f FPS end-to-end ---\n", fps);
+            printf("  --- %.1f FPS end-to-end  chip temp: %.1f°C ---\n", fps, chip_temp_celsius());
             t_last_fps = now;
         }
 
