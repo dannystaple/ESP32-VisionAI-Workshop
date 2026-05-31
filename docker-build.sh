@@ -16,7 +16,14 @@
 #
 # FIRST RUN
 #   The script builds the Docker image automatically if it does not exist.
-#   To force a rebuild:  docker rmi esp32-idf && ./docker-build.sh lab_02
+#   To force a rebuild:  docker rmi esp32-visionai && ./docker-build.sh lab_02
+#
+# CCACHE
+#   Build objects are cached in a named Docker volume 'esp32-visionai-ccache'.
+#   Subsequent builds of the same lab are significantly faster (~5-10x on
+#   incremental rebuilds). The cache persists across container restarts.
+#   To clear it when you no longer need it:
+#       docker volume rm esp32-visionai-ccache
 #
 # VS CODE DEV CONTAINER
 #   For the full IDE experience (IntelliSense, Wokwi, integrated flash):
@@ -54,6 +61,7 @@ fi
 IMAGE="${IMAGE:-esp32-visionai}"
 PORT="${PORT:-/dev/ttyUSB0}"
 DOCKERFILE="$REPO_ROOT/.devcontainer/Dockerfile"
+CCACHE_VOLUME="esp32-visionai-ccache"
 
 # ── Build image if missing ───────────────────────────────────────────────────
 if ! docker image inspect "$IMAGE" > /dev/null 2>&1; then
@@ -81,8 +89,11 @@ echo ""
 docker run --rm -it \
   "${DEVICE_FLAGS[@]+"${DEVICE_FLAGS[@]}"}" \
   -v "$REPO_ROOT:/workspaces" \
+  -v "$CCACHE_VOLUME:/root/.ccache" \
   -w "/workspaces/firmware/$LAB" \
   -e "IDF_PATH=/opt/esp/idf" \
   -e "IDF_TOOLS_PATH=/opt/esp" \
+  -e "IDF_CCACHE_ENABLE=1" \
+  -e "CCACHE_DIR=/root/.ccache" \
   "$IMAGE" \
   bash -c "source /opt/esp/idf/export.sh > /dev/null 2>&1 && idf.py -p '$PORT' $ACTION"
