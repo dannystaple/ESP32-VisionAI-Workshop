@@ -10,4 +10,5 @@ idf_component_register(
         esp_driver_tsens
         espressif__esp32-camera
         espressif__esp-tflite-micro
+        espressif__led_strip
 )
