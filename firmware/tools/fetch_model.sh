@@ -26,16 +26,16 @@ else
     echo "==> Model already present: $MODEL_FILE"
 fi
 
-echo "==> Generating model_data.cc via xxd..."
+echo "==> Generating ${OUT_CC} via xxd..."
 # xxd generates:  unsigned char <name>[] = {...};  unsigned int <name>_len = NNN;
 xxd -i "$MODEL_FILE" > "$OUT_CC"
 
 # xxd uses the full path as the variable name; fix it to the expected symbol names.
 # Use 'extern const' (not just 'const') so C++ gives these external linkage.
-sed -i '' \
+sed -i \
     's/unsigned char .*\[\]/extern const unsigned char person_detect_tflite[]/g' \
     "$OUT_CC"
-sed -i '' \
+sed -i \
     's/unsigned int .*_len/extern const unsigned int person_detect_tflite_len/g' \
     "$OUT_CC"
 
