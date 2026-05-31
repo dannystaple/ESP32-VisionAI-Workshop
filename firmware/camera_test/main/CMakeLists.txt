@@ -9,4 +9,5 @@ idf_component_register(
         esp_http_server
         espressif__esp32-camera
         esp_timer
+        driver
 )

@@ -10,12 +10,29 @@
 #include "esp_timer.h"
 #include "esp_camera.h"
 #include "camera_pins.h"
+#include "driver/temperature_sensor.h"
 
 // WiFi credentials come from Kconfig (menuconfig or sdkconfig.defaults.local)
 #define WIFI_SSID CONFIG_WIFI_SSID
 #define WIFI_PASS CONFIG_WIFI_PASSWORD
 
 static const char *TAG = "camera_test";
+
+static temperature_sensor_handle_t s_temp_sensor = NULL;
+
+static void temp_sensor_init(void)
+{
+    temperature_sensor_config_t cfg = TEMPERATURE_SENSOR_CONFIG_DEFAULT(20, 100);
+    ESP_ERROR_CHECK(temperature_sensor_install(&cfg, &s_temp_sensor));
+    ESP_ERROR_CHECK(temperature_sensor_enable(s_temp_sensor));
+}
+
+static float chip_temp_celsius(void)
+{
+    float t = 0.0f;
+    if (s_temp_sensor) temperature_sensor_get_celsius(s_temp_sensor, &t);
+    return t;
+}
 
 // ---------------------------------------------------------------------------
 // Camera init
@@ -43,7 +60,7 @@ static esp_err_t camera_init(void)
         .pixel_format = PIXFORMAT_JPEG,
         .frame_size   = FRAMESIZE_QVGA,   // 320x240 — safe default
         .jpeg_quality = 12,               // 0=best, 63=worst
-        .fb_count     = 2,
+        .fb_count     = 3,                   // 3 bufs: capture never stalls waiting for send to finish
         .fb_location  = CAMERA_FB_IN_PSRAM,
         .grab_mode    = CAMERA_GRAB_LATEST,
     };
@@ -98,7 +115,7 @@ static esp_err_t stream_handler(httpd_req_t *req)
         int64_t now = esp_timer_get_time();
         if (now - last_log > 5000000) {   // log FPS every 5 s
             float fps = frame_count / ((now - last_log) / 1e6f);
-            ESP_LOGI(TAG, "Stream: %.1f FPS", fps);
+            ESP_LOGI(TAG, "Stream: %.1f FPS  chip temp: %.1f°C", fps, chip_temp_celsius());
             frame_count = 0;
             last_log = now;
         }
@@ -190,11 +207,13 @@ void app_main(void)
     ESP_LOGI(TAG, "ESP32-S3 Camera Test — starting");
 
     ESP_ERROR_CHECK(nvs_flash_init());
+    temp_sensor_init();
     ESP_ERROR_CHECK(camera_init());
     wifi_init();
 
-    // Camera runs via HTTP handler; nothing else needed in main task
+    // Periodically log chip temperature so thermals are visible on the monitor
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(10000));
+        ESP_LOGI(TAG, "Chip temp: %.1f°C", chip_temp_celsius());
     }
 }
